@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d0f14">
+<title>DYPSA Tracker</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: #0d0f14;
+    color: #e8eaf2;
+    font-family: -apple-system, 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .card {
+    background: #161922;
+    border: 1px solid #2a3042;
+    border-radius: 24px;
+    padding: 36px 28px;
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .logo {
+    width: 72px; height: 72px;
+    background: linear-gradient(135deg, #4d9fff, #4fffb0);
+    border-radius: 20px;
+    display: grid;
+    place-items: center;
+    font-size: 36px;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  h1 span { color: #4fffb0; }
+
+  .input-wrap {
+    width: 100%;
+  }
+
+  .input-wrap label {
+    display: block;
+    font-size: 11px;
+    color: #6b7494;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  .input-wrap input {
+    width: 100%;
+    padding: 14px 16px;
+    background: #0d0f14;
+    border: 1px solid #2a3042;
+    border-radius: 12px;
+    color: #e8eaf2;
+    font-size: 16px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .input-wrap input:focus { border-color: #4d9fff; }
+
+  /* Status display */
+  .status-box {
+    width: 100%;
+    background: #0d0f14;
+    border: 1px solid #2a3042;
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+  }
+
+  .status-label { color: #6b7494; }
+  .status-val { color: #e8eaf2; font-weight: 500; font-size: 12px; text-align: right; max-width: 60%; }
+  .status-val.green { color: #4fffb0; }
+  .status-val.blue { color: #4d9fff; }
+  .status-val.warn { color: #ffb84d; }
+  .status-val.red { color: #ff5f5f; }
+
+  /* Pulse indicator */
+  .pulse-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .pulse {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #6b7494;
+    flex-shrink: 0;
+  }
+
+  .pulse.active {
+    background: #4fffb0;
+    animation: pulse 1.5s infinite;
+  }
+
+  .pulse.error { background: #ff5f5f; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(79,255,176,0.4); }
+    50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(79,255,176,0); }
+  }
+
+  /* Buttons */
+  .btn {
+    width: 100%;
+    padding: 16px;
+    border: none;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .btn-start {
+    background: linear-gradient(135deg, #4d9fff, #4fffb0);
+    color: #0d0f14;
+  }
+
+  .btn-start:active { transform: scale(0.97); }
+
+  .btn-stop {
+    background: #1e2330;
+    border: 1px solid #ff5f5f;
+    color: #ff5f5f;
+  }
+
+  .btn-stop:active { transform: scale(0.97); }
+
+  .hidden { display: none !important; }
+
+  .countdown {
+    font-size: 11px;
+    color: #6b7494;
+    text-align: center;
+  }
+
+  .countdown span { color: #4d9fff; font-weight: 600; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: #1e2330;
+    border: 1px solid #2a3042;
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-size: 13px;
+    color: #e8eaf2;
+    transition: transform 0.3s;
+    white-space: nowrap;
+    z-index: 999;
+  }
+
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.ok { border-color: #4fffb0; color: #4fffb0; }
+  #toast.err { border-color: #ff5f5f; color: #ff5f5f; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">📡</div>
+  <h1>DYPSA <span>Tracker</span></h1>
+
+  <div class="input-wrap">
+    <label>Tu email corporativo</label>
+    <input type="email" id="email-input" placeholder="nombre@dypsa.com" autocomplete="email">
+  </div>
+
+  <div class="status-box">
+    <div class="status-row">
+      <span class="status-label">Estado</span>
+      <div class="pulse-wrap">
+        <div class="pulse" id="pulse"></div>
+        <span class="status-val" id="status-text">Inactivo</span>
+      </div>
+    </div>
+    <div class="status-row">
+      <span class="status-label">Ubicación</span>
+      <span class="status-val blue" id="loc-text">—</span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">Último envío</span>
+      <span class="status-val" id="last-send">—</span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">Envíos OK</span>
+      <span class="status-val green" id="send-count">0</span>
+    </div>
+  </div>
+
+  <div class="countdown hidden" id="countdown-wrap">
+    Próximo envío en <span id="countdown">5:00</span>
+  </div>
+
+  <button class="btn btn-start" id="btn-start" onclick="startTracking()">
+    ▶ Iniciar seguimiento
+  </button>
+  <button class="btn btn-stop hidden" id="btn-stop" onclick="stopTracking()">
+    ⏹ Detener
+  </button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbylgYg0SrehT2lNF85xREgRdetUYi4va26bABSxeTHKzB1IvCVMXc4frFYASIotuXyi/exec';
+const INTERVAL = 5 * 60; // 5 minutos en segundos
+
+let watchId = null;
+let sendTimer = null;
+let countdownTimer = null;
+let countdown = INTERVAL;
+let sendCount = 0;
+let lastLat = null;
+let lastLng = null;
+let isTracking = false;
+
+// Load saved email
+window.onload = () => {
+  const saved = localStorage.getItem('dypsa_email');
+  if (saved) document.getElementById('email-input').value = saved;
+};
+
+function startTracking() {
+  const email = document.getElementById('email-input').value.trim();
+  if (!email || !email.includes('@')) {
+    showToast('⚠️ Ingresá tu email', 'err');
+    return;
+  }
+
+  localStorage.setItem('dypsa_email', email);
+  isTracking = true;
+
+  // UI
+  document.getElementById('btn-start').classList.add('hidden');
+  document.getElementById('btn-stop').classList.remove('hidden');
+  document.getElementById('countdown-wrap').classList.remove('hidden');
+  document.getElementById('email-input').disabled = true;
+  setPulse('active', 'Obteniendo GPS...');
+
+  // Start GPS watch
+  if (!navigator.geolocation) {
+    showToast('GPS no disponible en este dispositivo', 'err');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      lastLat = pos.coords.latitude;
+      lastLng = pos.coords.longitude;
+      updateLocDisplay();
+      sendLocation(); // Send immediately on start
+      startCountdown();
+    },
+    err => {
+      setPulse('error', 'Error GPS: ' + err.message);
+      showToast('Error al obtener GPS', 'err');
+    },
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+
+  // Watch position continuously
+  watchId = navigator.geolocation.watchPosition(
+    pos => {
+      lastLat = pos.coords.latitude;
+      lastLng = pos.coords.longitude;
+      updateLocDisplay();
+    },
+    err => console.warn('GPS watch error:', err),
+    { enableHighAccuracy: true, maximumAge: 30000 }
+  );
+}
+
+function stopTracking() {
+  isTracking = false;
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  clearInterval(sendTimer);
+  clearInterval(countdownTimer);
+
+  document.getElementById('btn-start').classList.remove('hidden');
+  document.getElementById('btn-stop').classList.add('hidden');
+  document.getElementById('countdown-wrap').classList.add('hidden');
+  document.getElementById('email-input').disabled = false;
+  setPulse('', 'Detenido');
+  showToast('Seguimiento detenido', '');
+}
+
+function startCountdown() {
+  countdown = INTERVAL;
+  updateCountdown();
+
+  countdownTimer = setInterval(() => {
+    countdown--;
+    if (countdown <= 0) {
+      countdown = INTERVAL;
+      sendLocation();
+    }
+    updateCountdown();
+  }, 1000);
+}
+
+function updateCountdown() {
+  const m = Math.floor(countdown / 60);
+  const s = countdown % 60;
+  const el = document.getElementById('countdown');
+  if (el) el.textContent = m + ':' + String(s).padStart(2, '0');
+}
+
+async function sendLocation() {
+  if (!lastLat || !lastLng) return;
+  const email = document.getElementById('email-input').value.trim();
+  if (!email) return;
+
+  setPulse('active', 'Enviando...');
+
+  try {
+    const url = `${SCRIPT_URL}?lat=${lastLat}&lng=${lastLng}&email=${encodeURIComponent(email)}`;
+    const r = await fetch(url, { redirect: 'follow' });
+    const data = await r.json();
+
+    if (data.ok) {
+      sendCount++;
+      document.getElementById('send-count').textContent = sendCount;
+      document.getElementById('last-send').textContent = new Date().toLocaleTimeString('es-AR');
+      setPulse('active', 'Activo ✓');
+      showToast('✅ Ubicación enviada', 'ok');
+    } else {
+      setPulse('error', 'Error al enviar');
+    }
+  } catch(e) {
+    setPulse('error', 'Sin conexión');
+    showToast('Sin conexión', 'err');
+  }
+}
+
+function updateLocDisplay() {
+  if (lastLat && lastLng) {
+    document.getElementById('loc-text').textContent =
+      lastLat.toFixed(5) + ', ' + lastLng.toFixed(5);
+  }
+}
+
+function setPulse(type, text) {
+  const pulse = document.getElementById('pulse');
+  const statusText = document.getElementById('status-text');
+  pulse.className = 'pulse ' + type;
+  statusText.textContent = text;
+  statusText.className = 'status-val ' + (type === 'active' ? 'green' : type === 'error' ? 'red' : '');
+}
+
+let toastTimer;
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = '', 3000);
+}
+</script>
+</body>
+</html>
