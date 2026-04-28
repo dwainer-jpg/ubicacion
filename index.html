@@ -346,18 +346,26 @@ function updateCountdown() {
   if (el) el.textContent = m + ':' + String(s).padStart(2, '0');
 }
 
-async function sendLocation() {
+function sendLocation() {
   if (!lastLat || !lastLng) return;
   const email = document.getElementById('email-input').value.trim();
   if (!email) return;
 
   setPulse('active', 'Enviando...');
 
-  try {
-    const url = `${SCRIPT_URL}?lat=${lastLat}&lng=${lastLng}&email=${encodeURIComponent(email)}`;
-    const r = await fetch(url, { redirect: 'follow' });
-    const data = await r.json();
+  const callbackName = 'cb_' + Date.now();
+  const script = document.createElement('script');
+  const timeout = setTimeout(() => {
+    delete window[callbackName];
+    script.remove();
+    setPulse('error', 'Sin conexión');
+    showToast('Sin conexión', 'err');
+  }, 15000);
 
+  window[callbackName] = (data) => {
+    clearTimeout(timeout);
+    delete window[callbackName];
+    script.remove();
     if (data.ok) {
       sendCount++;
       document.getElementById('send-count').textContent = sendCount;
@@ -367,10 +375,18 @@ async function sendLocation() {
     } else {
       setPulse('error', 'Error al enviar');
     }
-  } catch(e) {
+  };
+
+  script.onerror = () => {
+    clearTimeout(timeout);
+    delete window[callbackName];
+    script.remove();
     setPulse('error', 'Sin conexión');
     showToast('Sin conexión', 'err');
-  }
+  };
+
+  script.src = `${SCRIPT_URL}?lat=${lastLat}&lng=${lastLng}&email=${encodeURIComponent(email)}&callback=${callbackName}`;
+  document.head.appendChild(script);
 }
 
 function updateLocDisplay() {
