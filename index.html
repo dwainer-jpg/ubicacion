@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Device Tracker — Google Workspace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161922;
+    --surface2: #1e2330;
+    --border: #2a3042;
+    --accent: #4fffb0;
+    --accent2: #4d9fff;
+    --warn: #ffb84d;
+    --danger: #ff5f5f;
+    --text: #e8eaf2;
+    --text-muted: #6b7494;
+    --font-mono: 'Space Mono', monospace;
+    --font-sans: 'DM Sans', sans-serif;
+    --radius: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Grid noise overlay ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle at 20% 50%, rgba(77,159,255,0.04) 0%, transparent 60%),
+                      radial-gradient(circle at 80% 20%, rgba(79,255,176,0.04) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Header ── */
+  header {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(13,15,20,0.95);
+    backdrop-filter: blur(12px);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+  }
+
+  .logo-text {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--text);
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  /* Auth button */
+  #auth-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  #auth-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 16px rgba(79,255,176,0.1);
+  }
+
+  #auth-btn img { width: 18px; height: 18px; }
+
+  .user-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .user-pill .dot {
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  /* ── Setup screen ── */
+  #setup-screen {
+    position: relative;
+    z-index: 5;
+    max-width: 680px;
+    margin: 80px auto;
+    padding: 0 24px;
+    animation: fadeUp 0.5s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .setup-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 48px;
+  }
+
+  .setup-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: rgba(79,255,176,0.08);
+    border: 1px solid rgba(79,255,176,0.2);
+    border-radius: 100px;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--accent);
+    margin-bottom: 28px;
+  }
+
+  .setup-card h1 {
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    line-height: 1.2;
+  }
+
+  .setup-card p {
+    color: var(--text-muted);
+    font-size: 15px;
+    line-height: 1.6;
+    margin-bottom: 32px;
+  }
+
+  .input-group {
+    margin-bottom: 20px;
+  }
+
+  .input-group label {
+    display: block;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
+
+  .input-group input {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+
+  .input-group input:focus {
+    border-color: var(--accent2);
+    box-shadow: 0 0 0 3px rgba(77,159,255,0.1);
+  }
+
+  .input-group input::placeholder { color: var(--text-muted); }
+
+  .btn-primary {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    border: none;
+    border-radius: 10px;
+    color: #0d0f14;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(79,255,176,0.25);
+  }
+
+  .steps {
+    margin-top: 36px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+
+  .step-num {
+    width: 26px; height: 26px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent2);
+    flex-shrink: 0;
+  }
+
+  .step-text { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+  .step-text a { color: var(--accent2); text-decoration: none; }
+  .step-text a:hover { text-decoration: underline; }
+  .step-text code {
+    background: var(--surface2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  /* ── Main Dashboard ── */
+  #dashboard {
+    display: none;
+    position: relative;
+    z-index: 5;
+    flex-direction: column;
+    height: calc(100vh - 73px);
+  }
+
+  #dashboard.visible { display: flex; }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    gap: 1px;
+    background: var(--border);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .stat-item {
+    flex: 1;
+    padding: 14px 20px;
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .stat-icon {
+    font-size: 20px;
+    width: 36px; height: 36px;
+    background: var(--surface2);
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    letter-spacing: 0.06em;
+    margin-bottom: 2px;
+  }
+
+  .stat-value {
+    font-size: 22px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    color: var(--accent);
+  }
+
+  .stat-value.blue { color: var(--accent2); }
+  .stat-value.warn { color: var(--warn); }
+  .stat-value.danger { color: var(--danger); }
+
+  /* Main layout */
+  .main-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* Map */
+  #map {
+    height: 100%;
+    background: var(--bg);
+    filter: brightness(0.9) saturate(0.8);
+  }
+
+  /* Panel */
+  .side-panel {
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .panel-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+
+  .refresh-btn {
+    width: 30px; height: 30px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    color: var(--text-muted);
+    transition: all 0.2s;
+  }
+
+  .refresh-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .refresh-btn.spinning { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Search */
+  .search-wrap {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .search-wrap input {
+    width: 100%;
+    padding: 9px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .search-wrap input:focus {
+    border-color: var(--accent2);
+  }
+
+  /* Device list */
+  .device-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+
+  .device-list::-webkit-scrollbar { width: 4px; }
+  .device-list::-webkit-scrollbar-track { background: transparent; }
+  .device-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .device-card {
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg);
+  }
+
+  .device-card:hover, .device-card.active {
+    border-color: var(--accent2);
+    background: var(--surface2);
+    box-shadow: 0 0 0 1px rgba(77,159,255,0.1);
+  }
+
+  .device-card-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .device-os-icon {
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    font-size: 17px;
+    flex-shrink: 0;
+  }
+
+  .device-os-icon.android { background: rgba(79,255,176,0.1); }
+  .device-os-icon.ios { background: rgba(77,159,255,0.1); }
+  .device-os-icon.other { background: rgba(255,184,77,0.1); }
+
+  .device-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .device-user {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .device-card-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .meta-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .status-dot.ok { background: var(--accent); }
+  .status-dot.warn { background: var(--warn); }
+  .status-dot.danger { background: var(--danger); }
+  .status-dot.unknown { background: var(--text-muted); }
+
+  .no-location {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    grid-column: 1/-1;
+  }
+
+  /* Empty / loading states */
+  .state-msg {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    gap: 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 20px;
+  }
+
+  .state-msg .emoji { font-size: 32px; }
+
+  /* Map popup overrides */
+  .leaflet-popup-content-wrapper {
+    background: var(--surface2) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important;
+    color: var(--text) !important;
+  }
+
+  .leaflet-popup-tip { background: var(--surface2) !important; }
+  .leaflet-popup-content { margin: 14px 16px !important; font-family: var(--font-sans) !important; }
+
+  .popup-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .popup-user {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  .popup-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 4px 0;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+
+  .popup-row span:last-child { color: var(--text); font-family: var(--font-mono); font-size: 11px; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: 13px;
+    color: var(--text-muted);
+    z-index: 9999;
+    transition: transform 0.3s ease;
+    white-space: nowrap;
+  }
+
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.error { border-color: var(--danger); color: var(--danger); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">📡</div>
+    <div>
+      <div class="logo-text">DEVICE TRACKER</div>
+      <div class="logo-sub">Google Workspace Admin</div>
+    </div>
+  </div>
+  <div id="header-right">
+    <div class="user-pill">
+      <span class="dot"></span>
+      <span>DYPSA International</span>
+    </div>
+  </div>
+</header>
+
+<!-- Setup screen hidden - no auth needed -->
+<div id="setup-screen">
+  <div class="setup-card">
+    <div class="setup-badge">⚙️ Configuración inicial</div>
+    <h1>Rastreador de dispositivos<br>Workspace</h1>
+    <p>Visualizá en un mapa todos los dispositivos móviles con cuentas Google configuradas en tu organización. Necesitás tu <strong>Client ID de OAuth 2.0</strong>.</p>
+
+    <div class="input-group">
+      <label>CLIENT ID DE OAUTH 2.0</label>
+      <input type="text" id="client-id-input" placeholder="xxxxxxxxxxxx-xxxxxxxxxxxxxxxx.apps.googleusercontent.com">
+    </div>
+
+    <div class="input-group">
+      <label>DOMINIO DE LA ORGANIZACIÓN</label>
+      <input type="text" id="domain-input" placeholder="tuempresa.com">
+    </div>
+
+    <button class="btn-primary" onclick="saveConfig()">
+      🚀 Continuar y conectar con Google
+    </button>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Ir a <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a> → creá un proyecto nuevo (o usá uno existente)</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Habilitar <strong>Admin SDK API</strong> en "APIs y servicios"</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">Ir a "Credenciales" → <strong>Crear credencial</strong> → <strong>OAuth 2.0 Client ID</strong> → tipo: <code>Aplicación web</code></div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">En "Orígenes de JavaScript autorizados" agregar <code>http://localhost</code> y el directorio donde guardás este archivo (ej: <code>null</code> o la URL del archivo)</div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-text">Copiá el <strong>Client ID</strong> y pegalo arriba ↑</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Main Dashboard -->
+<div id="dashboard">
+  <div class="stats-bar">
+    <div class="stat-item">
+      <div class="stat-icon">📱</div>
+      <div>
+        <div class="stat-label">TOTAL DISPOSITIVOS</div>
+        <div class="stat-value" id="stat-total">—</div>
+      </div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-icon">📍</div>
+      <div>
+        <div class="stat-label">CON UBICACIÓN</div>
+        <div class="stat-value blue" id="stat-located">—</div>
+      </div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-icon">✅</div>
+      <div>
+        <div class="stat-label">APROBADOS</div>
+        <div class="stat-value" id="stat-approved">—</div>
+      </div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-icon">⚠️</div>
+      <div>
+        <div class="stat-label">COMPROMETIDOS</div>
+        <div class="stat-value danger" id="stat-compromised">—</div>
+      </div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-icon">🔄</div>
+      <div>
+        <div class="stat-label">PRÓXIMA ACTUALIZACIÓN</div>
+        <div class="stat-value blue" id="stat-countdown">2:00</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-layout">
+    <div id="map"></div>
+    <div class="side-panel">
+      <div class="panel-header">
+        <span class="panel-title">DISPOSITIVOS</span>
+        <button class="refresh-btn" id="refresh-btn" onclick="loadDevices()" title="Actualizar">↻</button>
+      </div>
+      <div class="search-wrap">
+        <input type="text" id="search-input" placeholder="🔍  Buscar dispositivo o usuario…" oninput="filterDevices(this.value)">
+      </div>
+      <div class="device-list" id="device-list">
+        <div class="state-msg">
+          <span class="emoji">⏳</span>
+          Cargando dispositivos…
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Config ──────────────────────────────────────────────────────────────────
+let CONFIG = {
+  clientId: localStorage.getItem('ws_client_id') || '',
+  domain: localStorage.getItem('ws_domain') || '',
+};
+
+const SCOPES = 'https://www.googleapis.com/auth/admin.directory.device.mobile.readonly';
+let tokenClient = null;
+let accessToken = null;
+let map = null;
+let markers = [];
+let allDevices = [];
+let activeCard = null;
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+let gisReady = false;
+
+// Poll until google.accounts is available (handles async/defer + file:// quirks)
+function waitForGIS(callback) {
+  if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+    gisReady = true;
+    callback();
+  } else {
+    setTimeout(() => waitForGIS(callback), 200);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  // No auth needed - load directly
+  document.getElementById('setup-screen').style.display = 'none';
+  showDashboard();
+  loadDevices();
+  // Auto-refresh every 2 minutes with countdown
+  let countdown = 120;
+  setInterval(loadDevices, 120000);
+  setInterval(() => {
+    countdown--;
+    if (countdown < 0) countdown = 120;
+    const m = Math.floor(countdown / 60);
+    const s = countdown % 60;
+    const el = document.getElementById('stat-countdown');
+    if (el) el.textContent = m + ':' + String(s).padStart(2, '0');
+  }, 1000);
+});
+
+function saveConfig() {
+  const cid    = document.getElementById('client-id-input').value.trim();
+  const domain = document.getElementById('domain-input').value.trim();
+  if (!cid || !domain) { showToast('⚠️ Completá ambos campos', true); return; }
+  CONFIG.clientId = cid;
+  CONFIG.domain   = domain;
+  localStorage.setItem('ws_client_id', cid);
+  localStorage.setItem('ws_domain',    domain);
+  startAuth();
+}
+
+function initTokenClient() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CONFIG.clientId,
+    scope: SCOPES,
+    callback: (resp) => {
+      if (resp.error) { showToast('Error de autenticación: ' + resp.error, true); return; }
+      accessToken = resp.access_token;
+      onAuthenticated(resp);
+    },
+  });
+}
+
+function startAuth() {
+  const cid    = document.getElementById('client-id-input').value.trim();
+  const domain = document.getElementById('domain-input').value.trim();
+  if (!cid || !domain) { showToast('Primero completá el Client ID y el dominio', true); return; }
+  CONFIG.clientId = cid;
+  CONFIG.domain   = domain;
+  localStorage.setItem('ws_client_id', cid);
+  localStorage.setItem('ws_domain',    domain);
+
+  showToast('⏳ Conectando con Google…');
+  waitForGIS(() => {
+    initTokenClient();
+    tokenClient.requestAccessToken();
+  });
+}
+
+async function onAuthenticated(resp) {
+  // Show user info
+  try {
+    const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: 'Bearer ' + accessToken }
+    });
+    const u = await r.json();
+    document.getElementById('header-right').innerHTML = `
+      <div class="user-pill">
+        <span class="dot"></span>
+        <span>${u.email}</span>
+        <span style="cursor:pointer;margin-left:4px;color:var(--text-muted)" onclick="logout()" title="Cerrar sesión">✕</span>
+      </div>
+    `;
+  } catch(e) {}
+
+  showDashboard();
+  loadDevices();
+}
+
+function showDashboard() {
+  document.getElementById('setup-screen').style.display = 'none';
+  const dash = document.getElementById('dashboard');
+  dash.classList.add('visible');
+  // Small delay to ensure DOM is rendered before Leaflet initializes
+  setTimeout(() => { if (!map) initMap(); }, 100);
+}
+
+// ── Map ──────────────────────────────────────────────────────────────────────
+function initMap() {
+  if (typeof L === 'undefined') { setTimeout(initMap, 200); return; }
+  map = L.map('map', { zoomControl: true, attributionControl: false }).setView([-34.6, -58.4], 4);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; Carto',
+    maxZoom: 19
+  }).addTo(map);
+}
+
+function clearMarkers() {
+  markers.forEach(m => m.remove());
+  markers = [];
+}
+
+function addMarker(device) {
+  if (!device._lat || !device._lng) return;
+
+  const os = getOS(device.type);
+  const color = os === 'android' ? '#4fffb0' : os === 'ios' ? '#4d9fff' : '#ffb84d';
+
+  const icon = L.divIcon({
+    className: '',
+    html: `<div style="
+      width:36px;height:36px;
+      background:${color}22;
+      border:2px solid ${color};
+      border-radius:50%;
+      display:grid;place-items:center;
+      font-size:16px;
+      box-shadow:0 0 12px ${color}55;
+      cursor:pointer;
+      transition:transform 0.2s;
+    ">${os === 'ios' ? '🍎' : os === 'android' ? '🤖' : '📱'}</div>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  });
+
+  const m = L.marker([device._lat, device._lng], { icon })
+    .addTo(map)
+    .bindPopup(buildPopup(device));
+
+  m.on('click', () => highlightCard(device.deviceId));
+  markers.push(m);
+  device._marker = m;
+}
+
+async function getAddress(lat, lng) {
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+    const data = await r.json();
+    return data.display_name ? data.display_name.split(',').slice(0,3).join(',') : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+  } catch(e) {
+    return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+  }
+}
+
+function buildPopup(d) {
+  const sync = d.lastSync ? timeSince(d.lastSync) : 'desconocido';
+  const coords = d._lat ? `${d._lat.toFixed(4)}, ${d._lng.toFixed(4)}` : '—';
+  const popupId = 'popup-addr-' + (d.deviceId || '').replace(/[^a-z0-9]/gi, '');
+  // Async load address into popup
+  if (d._lat) {
+    setTimeout(async () => {
+      const el = document.getElementById(popupId);
+      if (el) el.textContent = await getAddress(d._lat, d._lng);
+    }, 100);
+  }
+  return `
+    <div class="popup-title">${d.model || 'Dispositivo'}</div>
+    <div class="popup-user">👤 ${d.email?.[0] || d.name || '—'}</div>
+    <div class="popup-row"><span>OS</span><span>${d.os || d.type || '—'}</span></div>
+    <div class="popup-row"><span>Última actualización</span><span>${sync}</span></div>
+    <div class="popup-row"><span>Ubicación</span><span id="${popupId}">${coords}</span></div>
+    <div class="popup-row"><span>Estado</span><span>${statusLabel(d.status)}</span></div>
+    ${d.serialNumber ? `<div class="popup-row"><span>Serie</span><span>${d.serialNumber}</span></div>` : ''}
+    ${d.buildVersion ? `<div class="popup-row"><span>OS ver.</span><span>${d.buildVersion}</span></div>` : ''}
+  `;
+}
+
+// ── Devices API (via Apps Script proxy) ──────────────────────────────────────
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw2zKJXsTihCC45wtEYe3ZVQ75BpuOADQ7cIBB5mTxNkNi7Y3d6uwfqljQ0XhrKmV6w/exec';
+
+async function loadDevices() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+  document.getElementById('device-list').innerHTML = `<div class="state-msg"><span class="emoji">⏳</span>Consultando dispositivos…</div>`;
+
+  try {
+    const data = await new Promise((resolve, reject) => {
+      const callbackName = 'wsCallback_' + Date.now();
+      const script = document.createElement('script');
+      const timeout = setTimeout(() => {
+        delete window[callbackName];
+        script.remove();
+        reject(new Error('Timeout al conectar con el script'));
+      }, 15000);
+      window[callbackName] = (data) => {
+        clearTimeout(timeout);
+        delete window[callbackName];
+        script.remove();
+        resolve(data);
+      };
+      script.src = APPS_SCRIPT_URL + '?callback=' + callbackName;
+      script.onerror = () => {
+        clearTimeout(timeout);
+        delete window[callbackName];
+        script.remove();
+        reject(new Error('Error al cargar el script'));
+      };
+      document.head.appendChild(script);
+    });
+
+    // Convertir ubicaciones de la app Android al formato de dispositivos
+    const ubicaciones = data.ubicaciones || [];
+    const devices = ubicaciones.map(u => ({
+      deviceId: u.email,
+      email: [u.email],
+      model: u.email.split('@')[0],
+      type: 'ANDROID',
+      status: 'APPROVED',
+      lastSync: u.timestamp,
+      _lat: (u.lat && !isNaN(parseFloat(u.lat))) ? parseFloat(u.lat) : null,
+      _lng: (u.lng && !isNaN(parseFloat(u.lng))) ? parseFloat(u.lng) : null,
+      os: 'Android',
+      _fromApp: true
+    }));
+
+    devices.forEach(d => {
+      if (d._fromApp) return; // already has coords from Android app
+      d._lat = null; d._lng = null;
+      if (d.lastKnownNetwork && d.lastKnownNetwork[0]) {
+        const n = d.lastKnownNetwork[0];
+        if (n.latitude !== undefined) {
+          d._lat = parseFloat(n.latitude);
+          d._lng = parseFloat(n.longitude);
+        }
+      }
+    });
+
+    allDevices = devices;
+    renderAll(devices);
+    updateStats(devices);
+    showToast(`✅ ${devices.length} dispositivos cargados`);
+  } catch(e) {
+    showToast('Error: ' + e.message, true);
+    console.error(e);
+  } finally {
+    btn.classList.remove('spinning');
+  }
+}
+
+function renderAll(devices) {
+  clearMarkers();
+  const list = document.getElementById('device-list');
+
+  if (!devices.length) {
+    list.innerHTML = `<div class="state-msg"><span class="emoji">📭</span>No se encontraron dispositivos en este dominio</div>`;
+    return;
+  }
+
+  list.innerHTML = '';
+  const withLoc = devices.filter(d => d._lat);
+
+  devices.forEach(d => {
+    addMarker(d);
+    list.appendChild(buildCard(d));
+  });
+
+  if (withLoc.length) {
+    const bounds = L.latLngBounds(withLoc.map(d => [d._lat, d._lng]));
+    map.fitBounds(bounds, { padding: [40, 40] });
+  }
+
+  // Load addresses for cards asynchronously
+  withLoc.forEach(async d => {
+    const addr = await getAddress(d._lat, d._lng);
+    const el = document.getElementById('addr-' + (d.deviceId||'').replace(/[^a-z0-9]/gi,''));
+    if (el) el.textContent = '📍 ' + addr;
+  });
+}
+
+function buildCard(d) {
+  const os = getOS(d.type);
+  const osIcon = os === 'ios' ? '🍎' : os === 'android' ? '🤖' : '📱';
+  const sync = d.lastSync ? timeSince(d.lastSync) : '—';
+  const status = d.status || 'UNKNOWN';
+  const dotClass = status === 'APPROVED' ? 'ok' : status === 'COMPROMISED' ? 'danger' : status === 'BLOCKED' ? 'warn' : 'unknown';
+
+  const card = document.createElement('div');
+  card.className = 'device-card';
+  card.dataset.id = d.deviceId;
+  card.innerHTML = `
+    <div class="device-card-top">
+      <div class="device-os-icon ${os}">${osIcon}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="device-name">${d.model || 'Dispositivo desconocido'}</div>
+        <div class="device-user">${d.email?.[0] || d.name || '—'}</div>
+      </div>
+    </div>
+    <div class="device-card-meta">
+      <div class="meta-chip">
+        <span class="status-dot ${dotClass}"></span>
+        ${statusLabel(status)}
+      </div>
+      <div class="meta-chip">🔄 ${sync}</div>
+      ${d._lat
+        ? `<div class="meta-chip" style="grid-column:1/-1" id="addr-${(d.deviceId||'').replace(/[^a-z0-9]/gi,'')}">📍 ${d._lat.toFixed(4)}, ${d._lng.toFixed(4)}</div>`
+        : `<div class="no-location">📍 Sin ubicación disponible</div>`
+      }
+      ${d.os ? `<div class="meta-chip" style="color:var(--text-muted)">💾 ${d.os}</div>` : ''}
+      ${d.buildVersion ? `<div class="meta-chip" style="color:var(--text-muted)">v${d.buildVersion}</div>` : ''}
+    </div>
+  `;
+
+  card.addEventListener('click', () => {
+    if (d._marker) {
+      map.setView([d._lat, d._lng], 14, { animate: true });
+      d._marker.openPopup();
+    }
+    highlightCard(d.deviceId);
+  });
+
+  return card;
+}
+
+function highlightCard(id) {
+  document.querySelectorAll('.device-card').forEach(c => c.classList.remove('active'));
+  const target = document.querySelector(`.device-card[data-id="${id}"]`);
+  if (target) {
+    target.classList.add('active');
+    target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function updateStats(devices) {
+  document.getElementById('stat-total').textContent = devices.length;
+  document.getElementById('stat-located').textContent = devices.filter(d => d._lat).length;
+  document.getElementById('stat-approved').textContent = devices.filter(d => d.status === 'APPROVED').length;
+  document.getElementById('stat-compromised').textContent = devices.filter(d => d.status === 'COMPROMISED').length;
+}
+
+function filterDevices(q) {
+  const filtered = q
+    ? allDevices.filter(d =>
+        (d.model || '').toLowerCase().includes(q.toLowerCase()) ||
+        (d.email?.[0] || '').toLowerCase().includes(q.toLowerCase()) ||
+        (d.name || '').toLowerCase().includes(q.toLowerCase())
+      )
+    : allDevices;
+  document.getElementById('device-list').innerHTML = '';
+  clearMarkers();
+  filtered.forEach(d => {
+    addMarker(d);
+    document.getElementById('device-list').appendChild(buildCard(d));
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getOS(type) {
+  if (!type) return 'other';
+  const t = type.toLowerCase();
+  if (t.includes('ios') || t.includes('iphone') || t.includes('ipad') || t.includes('apple')) return 'ios';
+  if (t.includes('android')) return 'android';
+  return 'other';
+}
+
+function statusLabel(s) {
+  const map = { APPROVED: 'Aprobado', PENDING: 'Pendiente', BLOCKED: 'Bloqueado', COMPROMISED: 'Comprometido', UNKNOWN: 'Desconocido' };
+  return map[s] || s || 'Desconocido';
+}
+
+function timeSince(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `hace ${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `hace ${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  return `hace ${days}d`;
+}
+
+function logout() {
+  accessToken = null;
+  allDevices = [];
+  clearMarkers();
+  document.getElementById('dashboard').classList.remove('visible');
+  document.getElementById('setup-screen').style.display = '';
+  document.getElementById('header-right').innerHTML = `
+    <button id="auth-btn" onclick="startAuth()">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+      Iniciar sesión con Google
+    </button>
+  `;
+}
+
+let toastTimer;
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show' + (isError ? ' error' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = ''; }, 3500);
+}
+</script>
+</body>
+</html>
