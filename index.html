@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DYPSA Tracker — Horario Laboral</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;height:100vh;display:flex;flex-direction:column}
+.header{background:#1e293b;padding:12px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #334155;flex-shrink:0}
+.header h1{font-size:16px;font-weight:700;color:#f8fafc}
+.badge{background:#16a34a;color:white;font-size:11px;padding:2px 8px;border-radius:20px}
+.main{display:flex;flex:1;overflow:hidden}
+#map{flex:1;min-height:300px}
+.sidebar{width:280px;background:#1e293b;overflow-y:auto;border-left:1px solid #334155;flex-shrink:0}
+.sidebar-header{padding:12px 16px;border-bottom:1px solid #334155;font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}
+.device{padding:10px 16px;border-bottom:1px solid #1e293b;cursor:pointer;transition:background .15s}
+.device:hover{background:#0f172a}
+.device.selected{background:#1d3a6e}
+.device-name{font-size:13px;font-weight:600;color:#f1f5f9;margin-bottom:2px}
+.device-time{font-size:11px;color:#64748b}
+.device-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;margin-right:6px}
+.device-dot.old{background:#f59e0b}
+.device-dot.very-old{background:#ef4444}
+.refresh-btn{margin:12px 16px;width:calc(100% - 32px);padding:8px;background:#1d4ed8;border:none;border-radius:6px;color:white;font-size:13px;cursor:pointer}
+.empty{padding:20px;text-align:center;color:#475569;font-size:13px}
+@media(max-width:600px){.main{flex-direction:column-reverse}.sidebar{width:100%;max-height:40vh;border-left:none;border-top:1px solid #334155}}
+</style>
+</head>
+<body>
+<div class="header">
+  <span style="font-size:20px">🏢</span>
+  <h1>DYPSA Tracker — Horario Laboral</h1>
+  <span class="badge" id="count-badge">0 en horario</span>
+  <span style="margin-left:auto;font-size:12px;color:#64748b" id="last-update-header"></span>
+</div>
+<div class="main">
+  <div id="map"></div>
+  <div class="sidebar">
+    <div class="sidebar-header">En horario ahora</div>
+    <div id="device-list"><div class="empty">Cargando…</div></div>
+    <button class="refresh-btn" onclick="loadData()">🔄 Actualizar</button>
+  </div>
+</div>
+<script>
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwi3HQV85H-OK1rT8zOMwHf3-6_iu1KlOrtDvPAlBMbFyR9_r_qhLdZ0yAq1oWWrqFc/exec';
+const map = L.map('map').setView([-34.6, -58.4], 12);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© CartoDB'}).addTo(map);
+const markers = {};
+let selected = null;
+
+// Horario laboral: lunes a viernes 8-17hs
+function isWorkingHours() {
+  const now = new Date();
+  const day = now.getDay(); // 0=dom
+  const hour = now.getHours();
+  return day >= 1 && day <= 5 && hour >= 8 && hour < 17;
+}
+
+function ageClass(ts) {
+  if (!ts) return 'very-old';
+  const diff = (Date.now() - new Date(ts)) / 60000;
+  if (diff < 10) return '';
+  if (diff < 30) return 'old';
+  return 'very-old';
+}
+
+function ageText(ts) {
+  if (!ts) return 'Sin datos';
+  const diff = Math.floor((Date.now() - new Date(ts)) / 60000);
+  if (diff < 1) return 'Hace menos de 1 min';
+  if (diff < 60) return 'Hace ' + diff + ' min';
+  return 'Hace ' + Math.floor(diff/60) + 'h ' + (diff%60) + 'min';
+}
+
+function loadData() {
+  const cb = 'cb_' + Date.now();
+  window[cb] = function(data) {
+    const locs = data.ubicaciones || [];
+    // Filtrar: solo los que tienen ubicación reciente (últimas 2 horas) durante horario laboral
+    const filtered = isWorkingHours()
+      ? locs.filter(l => {
+          if (!l.timestamp) return false;
+          const diff = (Date.now() - new Date(l.timestamp)) / 60000;
+          return diff < 120;
+        })
+      : [];
+    renderDevices(filtered, locs.length);
+    delete window[cb];
+  };
+  const s = document.createElement('script');
+  s.src = SCRIPT_URL + '?callback=' + cb;
+  document.head.appendChild(s);
+  document.getElementById('last-update-header').textContent = new Date().toLocaleTimeString('es-AR');
+}
+
+function renderDevices(locs, total) {
+  document.getElementById('count-badge').textContent = locs.length + ' en horario';
+  const list = document.getElementById('device-list');
+  list.innerHTML = '';
+
+  if (locs.length === 0) {
+    if (!isWorkingHours()) {
+      list.innerHTML = '<div class="empty">Fuera de horario laboral<br><small>Lun-Vie 8:00-17:00</small></div>';
+    } else {
+      list.innerHTML = '<div class="empty">Sin empleados con ubicación reciente</div>';
+    }
+    return;
+  }
+
+  locs.forEach(loc => {
+    if (!loc.lat || !loc.lng) return;
+    const name = loc.email.split('@')[0];
+    const ac = ageClass(loc.timestamp);
+    const color = ac===''?'#22c55e':ac==='old'?'#f59e0b':'#ef4444';
+    const icon = L.divIcon({className:'', html:`<div style="background:${color};width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,.3)"></div>`, iconSize:[14,14], iconAnchor:[7,7]});
+    if (markers[loc.email]) {
+      markers[loc.email].setLatLng([loc.lat, loc.lng]).setIcon(icon);
+    } else {
+      markers[loc.email] = L.marker([loc.lat, loc.lng], {icon}).addTo(map)
+        .bindPopup(`<b>${name}</b><br>${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`);
+    }
+    const div = document.createElement('div');
+    div.className = 'device' + (selected === loc.email ? ' selected' : '');
+    div.innerHTML = `<div class="device-name"><span class="device-dot ${ac}"></span>${name}</div><div class="device-time">${ageText(loc.timestamp)}</div>`;
+    div.onclick = () => { selected = loc.email; map.setView([loc.lat, loc.lng], 15); markers[loc.email].openPopup(); renderDevices(locs, total); };
+    list.appendChild(div);
+  });
+}
+
+loadData();
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>
